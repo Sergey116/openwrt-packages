@@ -1,9 +1,9 @@
 name: Build sstp-client for OpenWrt 24.10.2 (AR750S)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
 
 jobs:
   build:
