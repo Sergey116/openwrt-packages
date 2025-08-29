@@ -1,0 +1,84 @@
+name: Build sstp-client for OpenWrt 24.10.2 (AR750S)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      OWRT_VER: "24.10.2"
+      TARGET: "ath79"
+      SUBTARGET: "nand"
+      FEED_NAME: "custom"
+      PACKAGE_NAME: "sstp-client"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison gawk \
+            libncurses5-dev libncursesw5-dev zlib1g-dev python3 rsync wget \
+            unzip file bc ca-certificates git
+
+      - name: Detect and download SDK
+        run: |
+          set -euxo pipefail
+          BASE_URL="https://downloads.openwrt.org/releases/${OWRT_VER}/targets/${TARGET}/${SUBTARGET}/"
+          SDK_TAR=$(curl -fsSL "$BASE_URL" | grep -oE 'openwrt-sdk-[^"]+Linux-x86_64\.tar\.xz' | head -n1)
+          test -n "$SDK_TAR"
+          echo "Found SDK: $SDK_TAR"
+          curl -fSL -O "${BASE_URL}${SDK_TAR}"
+          tar -xf "$SDK_TAR"
+          SDK_DIR="${SDK_TAR%.tar.xz}"
+          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+
+      - name: Prepare SDK
+        run: |
+          set -euxo pipefail
+          cd "$SDK_DIR"
+
+          # Кэш загрузок (ускоряет повторные сборки)
+          mkdir -p "$GITHUB_WORKSPACE/.cache-dl"
+          ln -s "$GITHUB_WORKSPACE/.cache-dl" dl || true
+
+          # Подключаем локальный фид с вашим пакетом
+          cat > feeds.conf <<EOF
+          src-link ${FEED_NAME} ${GITHUB_WORKSPACE}/openwrt-packages
+          EOF
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -p ${FEED_NAME} ${PACKAGE_NAME}
+
+          # Для SDK таргет уже зашит (ath79/generic). Можно сразу собирать пакет.
+          echo "CONFIG_SIGNED_PACKAGES=n" >> .config
+          make defconfig
+
+      - name: Build package
+        run: |
+          set -euxo pipefail
+          cd "$SDK_DIR"
+          make package/${PACKAGE_NAME}/clean
+          make package/${PACKAGE_NAME}/compile -j$(nproc) V=sc
+
+      - name: Collect artifacts
+        run: |
+          set -euxo pipefail
+          cd "$SDK_DIR"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          # Пакеты фида попадают в bin/packages/<arch>/<feed>/
+          ARCH_DIR=$(ls bin/packages | head -n1)  # ожидается mips_24kc
+          FEED_DIR="${FEED_NAME}"
+          cp -v bin/packages/${ARCH_DIR}/${FEED_DIR}/${PACKAGE_NAME}_*_${ARCH_DIR}.ipk "$GITHUB_WORKSPACE/artifacts/" || true
+          # Зависимости/доп. пакеты (если есть)
+          find bin/packages/${ARCH_DIR}/${FEED_DIR} -maxdepth 1 -type f -name "*.ipk" -not -name "${PACKAGE_NAME}_*_${ARCH_DIR}.ipk" -exec cp -v {} "$GITHUB_WORKSPACE/artifacts/" \; || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sstp-client_mips_24kc_24.10.2
+          path: artifacts
