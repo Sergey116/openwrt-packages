@@ -23,18 +23,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential clang flex bison gawk \
             libncurses5-dev libncursesw5-dev zlib1g-dev python3 rsync wget \
-            unzip file bc ca-certificates git
+            unzip file bc ca-certificates git zstd
 
       - name: Detect and download SDK
         run: |
           set -euxo pipefail
           BASE_URL="https://downloads.openwrt.org/releases/${OWRT_VER}/targets/${TARGET}/${SUBTARGET}/"
-          SDK_TAR=$(curl -fsSL "$BASE_URL" | grep -oE 'openwrt-sdk-[^"]+Linux-x86_64\.tar\.xz' | head -n1)
+          SDK_TAR=$(curl -fsSL "$BASE_URL" | grep -oE 'openwrt-sdk-[^"]+Linux-x86_64\.tar\.zst' | head -n1)
           test -n "$SDK_TAR"
           echo "Found SDK: $SDK_TAR"
           curl -fSL -O "${BASE_URL}${SDK_TAR}"
-          tar -xf "$SDK_TAR"
-          SDK_DIR="${SDK_TAR%.tar.xz}"
+          tar --zstd -xf "$SDK_TAR"
+          SDK_DIR="${SDK_TAR%.tar.zst}"
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
 
       - name: Prepare SDK
