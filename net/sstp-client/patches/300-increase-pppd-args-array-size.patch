@@ -1,0 +1,13 @@
+diff --git a/src/sstp-pppd.c b/src/sstp-pppd.c
+index b69b2ea..b7bd8da 100644
+--- a/src/sstp-pppd.c
++++ b/src/sstp-pppd.c
+@@ -509,7 +509,7 @@ status_t sstp_pppd_start(sstp_pppd_st *ctx, sstp_option_st *opts,
+     /* Launch PPPd, unless PPPd launched us */
+     if (!(SSTP_OPT_NOLAUNCH & opts->enable))
+     {
+-        const char *args[20];
++        const char *args[200];
+         int i = 0;
+         int j = 0;
+         char speed[10];
